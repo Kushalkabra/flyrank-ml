@@ -1,0 +1,24 @@
+{
+  "model": "GradientBoostingClassifier (w05/w06 validated, client-grouped split)",
+  "precision_at_50_validated": 0.76,
+  "n_eligible": 30000,
+  "archetype_counts": {
+    "monitor_routine": 10239,
+    "refresh_priority": 9043,
+    "monitor_low_demand": 5715,
+    "protect": 2676,
+    "ctr_opportunity": 2327
+  },
+  "actionable_share": 0.5695,
+  "decline_probability_by_freshness_tier": {
+    "0-30": 0.524,
+    "181+": 0.493,
+    "31-90": 0.734,
+    "91-180": 0.623
+  },
+  "queue_path": "work/outputs/action_playbook_queue.csv",
+  "figures": [
+    "work/figures/archetype_mix.png",
+    "work/figures/decline_by_freshness.png"
+  ]
+}

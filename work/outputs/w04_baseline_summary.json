@@ -1,0 +1,13 @@
+{
+  "signal_1_ctr_vs_position": "CONFIRMED (directional, mean CTR monotonic by tier; noisy at top_3)",
+  "signal_2_staleness_vs_decline": "MIXED (not monotonic; small n in older buckets)",
+  "reason_code": "ctr_underperform_vs_position",
+  "action_labels": [
+    "review_for_ctr_fix",
+    "monitor"
+  ],
+  "n_eligible": 30000,
+  "n_flagged": 6768,
+  "flagged_share": 0.2256,
+  "queue_path": "work/outputs/baseline_action_score.csv"
+}

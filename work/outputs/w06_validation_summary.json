@@ -1,0 +1,16 @@
+{
+  "paper_findings_critiqued": [
+    "ML Appendix - Random Forest predicting Health Score (98% of importance is the score's own formula components)",
+    "ML Appendix - Logistic Regression growth prediction (71% accuracy vs an unstated ~62% majority-class baseline)"
+  ],
+  "split_before_after": {
+    "random_split": {
+      "note": "client overlap present, inflated metrics"
+    },
+    "grouped_split": {
+      "note": "zero client overlap, matches w05 reported numbers"
+    }
+  },
+  "leakage_audit": "no hard leaks found in the 10-feature set; impressions_90d has weak (0.024) correlation with trend_pct",
+  "claim_rewrite": "w05's baseline-vs-model claim rewritten with split + proxy-label caveats"
+}
