@@ -1,0 +1,431 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>The Content Refresh Signal — A Search Intelligence Study</title>
+<meta name="description" content="An observational study of which content pages deserve editorial review first, using search and engagement signals from the FlyRank ML Internship dataset.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Source+Serif+4:opsz,wght@8..60,400;8..60,500;8..60,600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --ink: #12151c;
+    --ink-soft: #4b5566;
+    --paper: #f5f6f8;
+    --paper-warm: #eef0f3;
+    --line: #dcdfe4;
+    --signal: #1a9e86;
+    --signal-dim: #d8efeb;
+    --risk: #d98c2b;
+    --risk-dim: #f7e6cc;
+    --white: #ffffff;
+    --display: 'Space Grotesk', sans-serif;
+    --body: 'Source Serif 4', serif;
+    --mono: 'IBM Plex Mono', monospace;
+  }
+
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: var(--body);
+    font-size: 18px;
+    line-height: 1.65;
+  }
+  h1, h2, h3, .mono-label { font-family: var(--display); }
+  code, .mono, .stat-num { font-family: var(--mono); }
+
+  a { color: var(--signal); text-decoration-thickness: 1px; }
+  a:hover { color: var(--ink); }
+  a:focus-visible, button:focus-visible { outline: 3px solid var(--signal); outline-offset: 2px; }
+
+  .wrap { max-width: 780px; margin: 0 auto; padding: 0 24px; }
+  .wrap-wide { max-width: 980px; margin: 0 auto; padding: 0 24px; }
+
+  /* ---------- SERP tier bar, the signature element ---------- */
+  .tier-bar {
+    display: flex;
+    height: 10px;
+    width: 100%;
+    border-radius: 5px;
+    overflow: hidden;
+    margin: 28px 0;
+  }
+  .tier-bar span { flex: 1; }
+  .tier-bar .t1 { background: #1a9e86; }
+  .tier-bar .t2 { background: #4fb89f; }
+  .tier-bar .t3 { background: #a9cf9a; }
+  .tier-bar .t4 { background: #e0b96b; }
+  .tier-bar .t5 { background: #d98c2b; }
+
+  /* ---------- nav ---------- */
+  nav.toc {
+    position: sticky; top: 0; z-index: 20;
+    background: rgba(18,21,28,0.96);
+    backdrop-filter: blur(6px);
+    border-bottom: 1px solid #2a2f3a;
+  }
+  nav.toc .wrap-wide { display: flex; gap: 22px; overflow-x: auto; padding-top: 14px; padding-bottom: 14px; }
+  nav.toc a {
+    font-family: var(--mono); font-size: 12.5px; letter-spacing: 0.04em; text-transform: uppercase;
+    color: #b7bec9; white-space: nowrap; text-decoration: none;
+  }
+  nav.toc a:hover { color: var(--signal); }
+
+  /* ---------- hero ---------- */
+  header.hero {
+    background: var(--ink);
+    color: #eef0f3;
+    padding: 76px 0 56px;
+  }
+  .eyebrow {
+    font-family: var(--mono); font-size: 12.5px; letter-spacing: 0.12em; text-transform: uppercase;
+    color: var(--signal); margin-bottom: 18px;
+  }
+  h1.title {
+    font-size: clamp(34px, 5.2vw, 54px);
+    line-height: 1.08;
+    font-weight: 600;
+    margin: 0 0 22px;
+    max-width: 16ch;
+  }
+  .abstract {
+    font-family: var(--body); font-size: 19px; color: #d3d7de; max-width: 62ch; line-height: 1.7;
+  }
+  .meta-row {
+    display: flex; flex-wrap: wrap; gap: 10px 28px; margin-top: 34px;
+    font-family: var(--mono); font-size: 13px; color: #9aa2af;
+  }
+  .meta-row b { color: #e3e6ea; font-weight: 500; }
+
+  /* ---------- sections ---------- */
+  section { padding: 64px 0; border-bottom: 1px solid var(--line); }
+  section.alt { background: var(--white); }
+  section.limits { background: var(--risk-dim); border-bottom: 1px solid #ecd8b0; }
+  h2.section-title {
+    font-size: 13px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-soft);
+    margin: 0 0 8px; font-weight: 600;
+  }
+  h3.section-head {
+    font-size: 30px; font-weight: 600; margin: 0 0 26px; line-height: 1.25; max-width: 26ch;
+  }
+  p { margin: 0 0 18px; }
+  ul, ol { padding-left: 22px; }
+  li { margin-bottom: 10px; }
+
+  /* ---------- stat callouts ---------- */
+  .stat-row { display: flex; flex-wrap: wrap; gap: 18px; margin: 30px 0 8px; }
+  .stat-card {
+    flex: 1 1 150px; background: var(--white); border: 1px solid var(--line); border-radius: 10px;
+    padding: 18px 18px 16px;
+  }
+  section.alt .stat-card { background: var(--paper-warm); }
+  .stat-num { font-size: 28px; font-weight: 600; color: var(--ink); display: block; }
+  .stat-label { font-size: 13px; color: var(--ink-soft); margin-top: 4px; }
+
+  /* ---------- results table ---------- */
+  table.results { width: 100%; border-collapse: collapse; margin: 28px 0; font-family: var(--mono); font-size: 14.5px; }
+  table.results th, table.results td { text-align: left; padding: 12px 14px; border-bottom: 1px solid var(--line); }
+  table.results th { font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--ink-soft); }
+  table.results tr.win td { color: var(--signal); font-weight: 600; }
+
+  figure { margin: 32px 0; }
+  figure img { width: 100%; border-radius: 10px; border: 1px solid var(--line); display: block; }
+  figcaption { font-family: var(--mono); font-size: 13px; color: var(--ink-soft); margin-top: 10px; }
+
+  .callout {
+    border-left: 3px solid var(--signal); background: var(--signal-dim);
+    padding: 16px 20px; border-radius: 0 8px 8px 0; margin: 24px 0; font-size: 16px;
+  }
+  .callout.warn { border-left-color: var(--risk); background: transparent; border: 1px solid #ecd8b0; }
+
+  /* ---------- recommendations ---------- */
+  .rank-list { list-style: none; padding: 0; margin: 30px 0 0; }
+  .rank-item {
+    display: grid; grid-template-columns: 46px 1fr; gap: 16px;
+    background: var(--white); border: 1px solid var(--line); border-radius: 10px;
+    padding: 18px 20px; margin-bottom: 14px;
+  }
+  .rank-badge {
+    font-family: var(--mono); font-weight: 600; font-size: 14px; color: var(--white);
+    background: var(--ink); border-radius: 6px; width: 40px; height: 40px;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .rank-item h4 { margin: 0 0 6px; font-family: var(--display); font-size: 17px; }
+  .rank-item .tags { margin-top: 10px; display: flex; gap: 8px; flex-wrap: wrap; }
+  .tag {
+    font-family: var(--mono); font-size: 11.5px; padding: 3px 8px; border-radius: 5px;
+    background: var(--paper-warm); color: var(--ink-soft); border: 1px solid var(--line);
+  }
+  .tag.action { background: var(--signal-dim); color: #0f6e5c; border-color: #bfe4dc; }
+
+  /* ---------- repro / footer ---------- */
+  .repro-list { list-style: none; padding: 0; }
+  .repro-list li {
+    font-family: var(--mono); font-size: 14.5px; padding: 10px 0; border-bottom: 1px solid var(--line);
+  }
+  footer {
+    background: var(--ink); color: #b7bec9; padding: 48px 0 60px; font-size: 15px;
+  }
+  footer a { color: var(--signal); }
+  footer .credit { font-family: var(--mono); font-size: 13px; margin-top: 18px; color: #8a92a0; }
+
+  @media (max-width: 640px) {
+    section { padding: 46px 0; }
+    h3.section-head { font-size: 24px; }
+    .rank-item { grid-template-columns: 36px 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<nav class="toc">
+  <div class="wrap-wide">
+    <a href="#intro">Introduction</a>
+    <a href="#data">Data</a>
+    <a href="#method">Methodology</a>
+    <a href="#results">Results</a>
+    <a href="#limits">Limitations</a>
+    <a href="#recs">Recommendations</a>
+    <a href="#repro">Reproducibility</a>
+  </div>
+</nav>
+
+<header class="hero">
+  <div class="wrap">
+    <div class="eyebrow">Search Intelligence Research · FlyRank ML Internship</div>
+    <h1 class="title">The Content Refresh Signal</h1>
+    <p class="abstract">
+      <strong>Abstract.</strong> With a limited editorial team and a growing content inventory, which pages
+      deserve review first? This study builds a client-held-out model that ranks 30,000 pages by predicted
+      decline risk, using only search and engagement signals available before any review decision is made.
+      A Gradient Boosting model reaches Precision@50 of 0.76 against a transparent rule-based baseline's 0.62 —
+      a 23% lift, on the same held-out clients and the same metric. The model leans more heavily on traffic
+      volume and content age than on content-quality signals, a limitation this paper reports rather than hides.
+      The result is a ranked, reason-coded action playbook, not a verdict on any single page.
+    </p>
+    <div class="tier-bar" aria-hidden="true">
+      <span class="t1"></span><span class="t2"></span><span class="t3"></span><span class="t4"></span><span class="t5"></span>
+    </div>
+    <div class="meta-row">
+      <span><b>Lane</b> Refresh / Content Opportunity Scoring</span>
+      <span><b>Dataset</b> FlyRank ML Internship, starter release</span>
+      <span><b>Repo</b> <a href="https://github.com/Kushalkabra/flyrank-ml" style="color:#e3e6ea">github.com/Kushalkabra/flyrank-ml</a></span>
+    </div>
+  </div>
+</header>
+
+<section id="intro">
+  <div class="wrap">
+    <h2 class="section-title">01 — Introduction</h2>
+    <h3 class="section-head">A content team can't review everything, so the ranking has to be honest</h3>
+    <p>
+      A content team managing thousands of pages cannot manually check each one for decline, opportunity, or
+      staleness every sprint. Some prioritization rule is always in use — usually an informal one, based on
+      whichever pages someone happened to notice. This study asks a narrower, answerable question: given a
+      page's trailing 90-day search and engagement signals, can a model rank pages by review priority more
+      precisely than a simple, transparent rule — and if so, by how much, and with what caveats?
+    </p>
+    <p>
+      The unit of analysis is one content page. The decision this work supports is which pages an editor
+      reviews first this cycle. The action is a manual review and, where warranted, a refresh. The cost of
+      getting it wrong is asymmetric: a false positive wastes editor time on a page that wasn't really at
+      risk, while a false negative lets a genuinely declining, high-demand page go unreviewed for another
+      cycle. That asymmetry is why this study is built and evaluated around <span class="mono">Precision@50</span>
+      — how many of the top 50 ranked pages are actually worth the review — rather than plain accuracy.
+    </p>
+  </div>
+</section>
+
+<section id="data" class="alt">
+  <div class="wrap">
+    <h2 class="section-title">02 — Data</h2>
+    <h3 class="section-head">30,000 pages, 32 clients, one 90-day snapshot</h3>
+    <p>
+      This study uses the anonymized starter release from the FlyRank ML Internship dataset
+      (<code>content_refresh_anonymized.csv</code>): 30,000 pseudonymized content items across 32
+      pseudonymized clients, each described by 44 trailing-90-day search and engagement columns. Rows are
+      filtered to pages with <code>impressions_90d &gt; 0</code> and <code>content_age_days &gt;= 90</code> —
+      every row in this release already meets that bar.
+    </p>
+    <div class="stat-row">
+      <div class="stat-card"><span class="stat-num">30,000</span><span class="stat-label">eligible pages</span></div>
+      <div class="stat-card"><span class="stat-num">32</span><span class="stat-label">pseudonymized clients</span></div>
+      <div class="stat-card"><span class="stat-num">54.2%</span><span class="stat-label">proxy-label positive rate</span></div>
+    </div>
+    <p><strong>Deliberately excluded:</strong></p>
+    <ul>
+      <li>No raw query, URL, title, or client-identifying text — none ships in this release, and none is reconstructed here.</li>
+      <li>No FlyRank product decision flags (health score, priority score, action type) — the release ships observable signals only.</li>
+      <li>30-day and previous-30-day breakdown fields are used only to verify the label definition, never as model features.</li>
+    </ul>
+  </div>
+</section>
+
+<section id="method">
+  <div class="wrap">
+    <h2 class="section-title">03 — Methodology</h2>
+    <h3 class="section-head">A proxy label, an honest split, and a leakage audit that already caught one mistake</h3>
+    <p>
+      <strong>Label.</strong> <code>is_declining = trend_direction == "down"</code> — a same-window
+      classification, not a verified future outcome. This proxy is used consistently and its limitation is
+      carried through every section below rather than argued away.
+    </p>
+    <p>
+      <strong>Baseline.</strong> A transparent rule: the gap between a page's CTR and its position tier's
+      volume-filtered average CTR, weighted by demand (log impressions), plus a small capped bonus for
+      pages stale 90–180 days. One reason code: <code>ctr_underperform_vs_position</code>.
+    </p>
+    <p>
+      <strong>Model.</strong> Gradient Boosting, selected after comparing Logistic Regression (AUC 0.528,
+      barely above chance) and Random Forest (AUC 0.599) on identical features and splits — Gradient
+      Boosting had the clearest edge (AUC 0.614). Ten features, all knowable before the decision point:
+      trailing impressions, clicks, sessions, average position, CTR, content age, days since last update,
+      word count, engagement rate, and scroll rate.
+    </p>
+    <div class="callout">
+      <strong>Validation design.</strong> Client-grouped 75/25 split (<code>GroupShuffleSplit</code> on
+      client ID), verified zero client overlap between train and test. This choice was not academic: the
+      same model under a plain random row split scored Precision@50 of 0.94, with 31 of 32 clients leaking
+      across train and test. The honest, client-held-out number is 0.76 — the gap is reported in full in
+      Limitations.
+    </div>
+    <p>
+      <strong>Leakage audit.</strong> An earlier trap (feeding the literal target-window value in as a
+      "feature") pushed AUC from an honest 0.595 to a meaningless 1.000, demonstrating what leakage looks
+      like before it was ruled out here. The final ten-feature set was re-audited: none is one of the
+      fields the label is directly computed from, and no product flag was used as a feature.
+    </p>
+  </div>
+</section>
+
+<section id="results" class="alt">
+  <div class="wrap-wide">
+    <h2 class="section-title">04 — Results</h2>
+    <h3 class="section-head">The model beats the baseline, on the same split, the same metric</h3>
+    <table class="results">
+      <thead>
+        <tr><th>Method</th><th>Precision@50</th><th>ROC AUC</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>Baseline — CTR-gap rule</td><td>0.62</td><td>0.586</td></tr>
+        <tr class="win"><td>Gradient Boosting model</td><td>0.76</td><td>0.614</td></tr>
+      </tbody>
+    </table>
+    <p>The model's top 50 ranked pages are 23% more precise than the baseline's, on clients the model never trained on.</p>
+
+    <figure>
+      <img src="assets/decline_by_freshness.png" alt="Bar chart: mean model-predicted decline probability by content freshness tier, highest at 91-180 days since last update.">
+      <figcaption>Fig. 1 — Decline probability by freshness tier. Pages 91–180 days since their last update carry the
+      highest average predicted decline risk (0.623) among tiers with meaningful sample size, versus 0.524 for
+      recently-updated pages (0–30 days).</figcaption>
+    </figure>
+
+    <figure>
+      <img src="assets/archetype_mix.png" alt="Horizontal bar chart of page counts by recommended action archetype.">
+      <figcaption>Fig. 2 — The full eligible inventory split into five review archetypes (Section 6).</figcaption>
+    </figure>
+  </div>
+</section>
+
+<section id="limits" class="limits">
+  <div class="wrap">
+    <h2 class="section-title">05 — Limitations</h2>
+    <h3 class="section-head">What this study does not show</h3>
+    <ul>
+      <li><strong>Proxy label, not a verified outcome.</strong> The label is computed from the same window as the features. A stricter prior-90-days-predicts-next-30-days label was piloted separately (AUC 0.595 on a mid-panel month) and is the honest next iteration, not what's reported above.</li>
+      <li><strong>Small, single-snapshot dataset.</strong> 30,000 pages, 32 clients, one time window. Not tested on a different vertical, time period, or client outside this release.</li>
+      <li><strong>Feature importance skews toward volume and age, not content quality.</strong> Impressions and content age account for 57% of the model's importance combined; CTR contributes about 5%, engagement rate about 1%. A "high risk" score is partly just "old and/or high-traffic," not a diagnosis of why a page struggles.</li>
+      <li><strong>No causal claim.</strong> Nothing here shows a refresh <em>causes</em> recovery — that requires a controlled experiment, not this observational data.</li>
+      <li><strong>No claim about Google's ranking algorithm.</strong> Every signal used is an observed outcome, never the mechanism behind it.</li>
+      <li><strong>Validation is honest, not exhaustive.</strong> The client-grouped split closed the largest leak found (0.94 → 0.76 Precision@50), but a leakage audit rules out only what it checks for.</li>
+    </ul>
+  </div>
+</section>
+
+<section id="recs">
+  <div class="wrap-wide">
+    <h2 class="section-title">06 — Ranked Recommendations</h2>
+    <h3 class="section-head">Five archetypes, one action each, always with a human in the loop</h3>
+    <p>Every eligible page is scored by the validated model and assigned to one archetype. This is decision-support for prioritizing review — not an automated action, and not a verdict on any individual page.</p>
+
+    <ol class="rank-list">
+      <li class="rank-item">
+        <div class="rank-badge">1</div>
+        <div>
+          <h4>Refresh priority — 9,043 pages</h4>
+          <p>Model decline probability ≥ 0.6 and impressions ≥ 500. The clearest review candidates: real demand, real modeled risk.</p>
+          <div class="tags"><span class="tag action">review_for_refresh</span><span class="tag">reason: high_risk_high_demand</span></div>
+        </div>
+      </li>
+      <li class="rank-item">
+        <div class="rank-badge">2</div>
+        <div>
+          <h4>CTR opportunity — 2,327 pages</h4>
+          <p>CTR sits below half of its position tier's benchmark, with enough impressions for the gap to be real, not noise.</p>
+          <div class="tags"><span class="tag action">review_for_ctr_fix</span><span class="tag">reason: ctr_underperform_vs_position</span></div>
+        </div>
+      </li>
+      <li class="rank-item">
+        <div class="rank-badge">3</div>
+        <div>
+          <h4>Monitor, low demand — 5,715 pages</h4>
+          <p>High modeled risk, but traffic too small for the risk score to be worth immediate editor time.</p>
+          <div class="tags"><span class="tag">monitor_low_priority</span><span class="tag">reason: high_risk_low_demand</span></div>
+        </div>
+      </li>
+      <li class="rank-item">
+        <div class="rank-badge">4</div>
+        <div>
+          <h4>Protect — 2,676 pages</h4>
+          <p>Top-tier position, low modeled decline risk. Distribute and leave alone — editing a stable strong page is a no-go, not an action.</p>
+          <div class="tags"><span class="tag">protect_distribute</span><span class="tag">reason: strong_stable_asset</span></div>
+        </div>
+      </li>
+      <li class="rank-item">
+        <div class="rank-badge">5</div>
+        <div>
+          <h4>Monitor, routine — 10,239 pages</h4>
+          <p>No archetype match. No action needed this cycle — not a judgment that these pages don't matter.</p>
+          <div class="tags"><span class="tag">monitor_routine</span></div>
+        </div>
+      </li>
+    </ol>
+
+    <div class="callout warn" style="margin-top:32px;">
+      <strong>What should never be automated:</strong> auto-publishing any content change from this score alone;
+      auto-pruning a page for scoring <code>monitor_routine</code>; treating a reason code as a finished diagnosis
+      without checking the underlying numbers; using this to promise a refresh will recover traffic, or to make
+      any claim about Google's algorithm.
+    </div>
+  </div>
+</section>
+
+<section id="repro" class="alt">
+  <div class="wrap">
+    <h2 class="section-title">07 — Reproducibility</h2>
+    <h3 class="section-head">Every step is a notebook, every notebook is public</h3>
+    <p>All seven weekly notebooks and the capstone notebook that mirrors this paper are committed to the repository below, executed with visible output.</p>
+    <ul class="repro-list">
+      <li><a href="https://github.com/Kushalkabra/flyrank-ml/blob/main/work/notebooks/capstone.ipynb">work/notebooks/capstone.ipynb</a> — mirrors this paper section by section</li>
+      <li><a href="https://github.com/Kushalkabra/flyrank-ml/blob/main/work/notebooks/w04_baseline_score.ipynb">w04_baseline_score.ipynb</a> — the baseline rule and signal checks</li>
+      <li><a href="https://github.com/Kushalkabra/flyrank-ml/blob/main/work/notebooks/w05_model.ipynb">w05_model.ipynb</a> — model selection and baseline comparison</li>
+      <li><a href="https://github.com/Kushalkabra/flyrank-ml/blob/main/work/notebooks/w06_validation_audit.ipynb">w06_validation_audit.ipynb</a> — the honest-split before/after and leakage audit</li>
+      <li><a href="https://github.com/Kushalkabra/flyrank-ml/blob/main/work/notebooks/w07_action_playbook.ipynb">w07_action_playbook.ipynb</a> — the ranked queue and archetype logic behind Section 6</li>
+      <li><a href="https://github.com/Kushalkabra/flyrank-ml/tree/main/work/outputs">work/outputs/</a> — metric receipts (JSON) each week's numbers trace back to</li>
+    </ul>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <p>Built on the <a href="https://flyrank.ai">FlyRank ML Internship dataset</a>.</p>
+    <div class="credit">Refresh / Content Opportunity Scoring lane · FlyRank ML Internship, 2026</div>
+  </div>
+</footer>
+
+</body>
+</html>
